@@ -11,6 +11,7 @@ import javax.annotation.Resource;
 
 import org.jboss.logging.Logger;
 import org.openqa.selenium.*;
+import org.openqa.selenium.chrome.ChromeOptions;
 import org.springframework.stereotype.Service;
 
 import com.revolv3r.gplus.dao.AlbumRepository;
@@ -85,25 +86,25 @@ public class GplusServiceImpl implements GplusService
   {
     List<AlbumData> newCompletedAlbumData = new ArrayList<>();
 
-    mWebDriver = new ChromeDriver();
+    mWebDriver = new ChromeDriver(getOptions());
     //first login to gplus
     mWebDriver.get("https://plus.google.com/discover");
-    WebElement loginButton = mWebDriver.findElement(By.xpath("//*[@id=\"gb_70\"]"));
-
-    //"//*[@id=\"orb-modules\"]/div[3]//button[contains(@class,'sp-c-football-scores-button')]"
-    loginButton.click();
-    pause(2);
+//    WebElement loginButton = mWebDriver.findElement(By.xpath("//*[@id=\"gb_70\"]"));
+//
+//    //"//*[@id=\"orb-modules\"]/div[3]//button[contains(@class,'sp-c-football-scores-button')]"
+//    loginButton.click();
+//    pause(2);
 
     //fill out login form
     WebElement usernameInput = mWebDriver.findElement(By.xpath("//*[@id=\"identifierId\"]"));
-    usernameInput.sendKeys("<email>");
+    usernameInput.sendKeys("<user>");
 
     WebElement nextButton = mWebDriver.findElement(By.xpath("//*[@id=\"identifierNext\"]"));
     nextButton.click();
     pause(1);
 
     WebElement passwordInput = mWebDriver.findElement(By.xpath("//*[@id=\"password\"]/div[1]/div/div[1]/input"));
-    passwordInput.sendKeys("<pass>");
+    passwordInput.sendKeys("<pass>>");
 
     nextButton = mWebDriver.findElement(By.xpath("//*[@id=\"passwordNext\"]"));
     nextButton.click();
@@ -120,7 +121,20 @@ public class GplusServiceImpl implements GplusService
     return newCompletedAlbumData;
   }
 
-  private List<PhotoData> getPhotosFromUrl(String aPageUrl, int aAlbumFk)
+  private ChromeOptions getOptions()
+  {
+    ChromeOptions options = new ChromeOptions();
+    options.addArguments("enable-automation");
+    options.addArguments("--no-sandbox");
+    options.addArguments("--disable-extensions");
+    options.addArguments("--dns-prefetch-disable");
+    options.addArguments("--disable-gpu");
+    options.setPageLoadStrategy(PageLoadStrategy.NORMAL);
+
+    return options;
+  }
+
+  public List<PhotoData> getPhotosFromUrl(String aPageUrl, int aAlbumFk)
   {
     List<PhotoData> photoList = new ArrayList<>();
 
@@ -140,66 +154,61 @@ public class GplusServiceImpl implements GplusService
 
       //getting thumbs
       int j = 1;
-      List<WebElement> lwe = mWebDriver.findElements(By.cssSelector("img"));
-      while (nextButton!=null && j < 47 && j<lwe.size())
+
+      while (nextButton!=null)
       {
+        WebElement lwe = mWebDriver.findElement(By.cssSelector(".nKtIqb.GOVOFb"));
+
         String fullSizeImageUrl=null,fullSizeTitle=null, thumbUrl=null;
         PhotoData photo = null;
+
+        pause(1);
+
+        //WebElement fullImageTag = mWebDriver.findElement(By.xpath("//*[@id=\"yDmH0d\"]/c-wiz/div[2]/div/content/c-wiz/div/div[2]/div["+ (j++) +"]/img"));
+        WebElement parent = lwe.findElement(By.xpath("./.."));
+
+        String parentAria = parent.getAttribute("aria-label");
+        if ("Start Video".equals(parentAria))
+        {
+          //found video
+          fullSizeImageUrl = parent.getAttribute("data-dlu");
+          thumbUrl = lwe.getAttribute("src");
+        }
+        else
+        {
+          fullSizeImageUrl = lwe.getAttribute("data-dlu");
+        }
+
+        fullSizeTitle = lwe.getAttribute("alt");
+
+        photo = new PhotoData(fullSizeTitle, thumbUrl);
+        photo.setImageUrl(fullSizeImageUrl);
+
         try
         {
-          pause(1);
-
-          //WebElement fullImageTag = mWebDriver.findElement(By.xpath("//*[@id=\"yDmH0d\"]/c-wiz/div[2]/div/content/c-wiz/div/div[2]/div["+ (j++) +"]/img"));
-          lwe = mWebDriver.findElements(By.cssSelector("img"));
-          WebElement parent = lwe.get(j).findElement(By.xpath("./.."));
-
-          String parentAria = parent.getAttribute("aria-label");
-          if ("Start Video".equals(parentAria))
-          {
-            //found video
-            fullSizeImageUrl = parent.getAttribute("data-dlu");
-            thumbUrl = lwe.get(j).getAttribute("src");
-          }
-          else
-          {
-            fullSizeImageUrl = lwe.get(j).getAttribute("src");
-          }
-          fullSizeTitle = lwe.get(j++).getAttribute("alt");
-
-          photo = new PhotoData(fullSizeTitle, thumbUrl);
-          photo.setImageUrl(fullSizeImageUrl);
-
           //get fullsized image data
           photo.setImageData(mUrlHelper.getByteDataFromUrl(fullSizeImageUrl));
           photo.setAlbum(aAlbumFk);
 
           photoList.add(photo);
           //go next
-          try
-          {
+
             WebElement nextButtonDiv = mWebDriver.findElement(By.cssSelector(".hj44f .Ce1Y1c"));
             nextButtonDiv.click();
-          }
-          catch(NoSuchElementException e)
-          {
-            break;
-          }
-          catch(ElementNotVisibleException e)
-          {
-            break;
-          }
-        }
-        catch (IndexOutOfBoundsException e)
-        {
-          e.printStackTrace();
         }
         catch (IOException e)
         {
           e.printStackTrace();
         }
+        catch(NoSuchElementException e)
+        {
+          break;
+        }
+        catch(ElementNotVisibleException e)
+        {
+          break;
+        }
       }
-
-
     }
 
     return photoList;
@@ -234,5 +243,10 @@ public class GplusServiceImpl implements GplusService
     } catch (InterruptedException e) {
       e.printStackTrace();
     }
+  }
+
+  public void setWebDriver(WebDriver aWebdriver)
+  {
+    mWebDriver = aWebdriver;
   }
 }
